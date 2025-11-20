@@ -1,0 +1,256 @@
+# Change "Data.csv" to your real filename if needed
+data_raw <- read.csv(
+"Data.csv",
+check.names = FALSE,                  # keep original column names
+na.strings = c("..", "", "NA")        # treat ".." etc. as NA
+)
+library(tidyverse)
+library(DescTools)
+library(tidyverse)
+source("E:/my project/recherche master edx/world hapines/world happines/word_happines.R")
+library(tidyverse)
+source("E:/my project/recherche master edx/world hapines/world happines/word_happines.R")
+############################################################
+# Life Expectancy Project using World Bank-style dataset
+# Uses similar structure/techniques as World Happiness code
+############################################################
+# ----- Libraries -----
+# install.packages(c("tidyverse", "caret", "DescTools", "ggcorrplot"))  # run once if needed
+library(tidyverse)
+library(caret)
+library(DescTools)
+library(ggcorrplot)
+# ---------------------------------------------------------
+# 1. Import dataset
+# ---------------------------------------------------------
+# Change "Data.csv" to your real filename if needed
+data_raw <- read.csv(
+"Data.csv",
+check.names = FALSE,                  # keep original column names
+na.strings = c("..", "", "NA")        # treat ".." etc. as NA
+)
+# quick peek
+glimpse(data_raw)
+# ---------------------------------------------------------
+# 2. Clean & prepare panel data (2005–2015)
+# ---------------------------------------------------------
+panel_data <- data_raw %>%
+# keep only rows where Time looks like a 4-digit year
+filter(stringr::str_detect(Time, "^[0-9]{4}$")) %>%
+mutate(
+Time = as.integer(as.character(Time))
+) %>%
+# keep years 2005–2015
+filter(Time >= 2005, Time <= 2015) %>%
+# convert key columns to numeric
+mutate(across(
+c(
+`Life expectancy at birth, total (years) [SP.DYN.LE00.IN]`,
+`GDP per capita, PPP (constant 2021 international $) [NY.GDP.PCAP.PP.KD]`,
+`School enrollment, secondary (% gross) [SE.SEC.ENRR]`,
+`Unemployment, total (% of total labor force) (national estimate) [SL.UEM.TOTL.NE.ZS]`,
+`Mortality rate, under-5 (per 1,000 live births) [SH.DYN.MORT]`,
+`Trade (% of GDP) [NE.TRD.GNFS.ZS]`,
+`Gini index [SI.POV.GINI]`
+),
+as.numeric
+)) %>%
+# give short variable names
+rename(
+life_exp    = `Life expectancy at birth, total (years) [SP.DYN.LE00.IN]`,
+gdp_ppp     = `GDP per capita, PPP (constant 2021 international $) [NY.GDP.PCAP.PP.KD]`,
+sec_enrol   = `School enrollment, secondary (% gross) [SE.SEC.ENRR]`,
+unemp_total = `Unemployment, total (% of total labor force) (national estimate) [SL.UEM.TOTL.NE.ZS]`,
+u5_mort     = `Mortality rate, under-5 (per 1,000 live births) [SH.DYN.MORT]`,
+trade       = `Trade (% of GDP) [NE.TRD.GNFS.ZS]`,
+gini        = `Gini index [SI.POV.GINI]`
+) %>%
+# drop rows missing any of the main modelling variables
+drop_na(life_exp, gdp_ppp, sec_enrol, unemp_total, u5_mort, trade, gini)
+# check panel size
+glimpse(panel_data)
+table(panel_data$Time)
+# subset for 2015 only (like 2019 in happiness example)
+data_2015 <- panel_data %>%
+filter(Time == 2015)
+# ---------------------------------------------------------
+# 3. Explore & visualize (2015 subset)
+# ---------------------------------------------------------
+glimpse(data_2015)
+str(data_2015)
+summary(data_2015)
+head(data_2015, 10)
+tail(data_2015, 10)
+# histogram of life expectancy
+hist(
+data_2015$life_exp,
+freq   = TRUE,
+col    = "black",
+border = "white",
+main   = "Life Expectancy (2015)",
+xlab   = "Years",
+ylab   = "Count"
+)
+# GDP per capita (PPP) vs life expectancy
+ggplot(data_2015, aes(x = gdp_ppp, y = life_exp)) +
+geom_point(color = "black") +
+geom_smooth(method = "lm", se = TRUE) +
+labs(title = "Life Expectancy vs GDP per capita (PPP), 2015")
+# Secondary enrolment vs life expectancy
+ggplot(data_2015, aes(x = sec_enrol, y = life_exp)) +
+geom_point(color = "black") +
+geom_smooth(method = "lm", se = TRUE) +
+labs(title = "Life Expectancy vs Secondary Enrolment, 2015")
+# Unemployment vs life expectancy
+ggplot(data_2015, aes(x = unemp_total, y = life_exp)) +
+geom_point(color = "black") +
+geom_smooth(method = "lm", se = TRUE) +
+labs(title = "Life Expectancy vs Unemployment, 2015")
+# Under-5 mortality vs life expectancy
+ggplot(data_2015, aes(x = u5_mort, y = life_exp)) +
+geom_point(color = "black") +
+geom_smooth(method = "lm", se = TRUE) +
+labs(title = "Life Expectancy vs Under-5 Mortality, 2015")
+# ---------------------------------------------------------
+# 4. Correlation matrix (2015 subset, like happiness example)
+# ---------------------------------------------------------
+temp_2015 <- data_2015 %>%
+select(life_exp, gdp_ppp, sec_enrol, unemp_total, u5_mort, trade, gini)
+cormat_2015 <- signif(
+cor(temp_2015, use = "pairwise.complete.obs"),
+2
+)
+ggcorrplot(cormat_2015)
+# ---------------------------------------------------------
+# 5. "Summation" model for 2015
+#    (linear combination using pre-estimated coefficients)
+# ---------------------------------------------------------
+sum_model_2015 <- data_2015 %>%
+mutate(
+pred_life_exp =
+71.801066 +
+0.000119 * gdp_ppp +
+0.023240 * sec_enrol +
+0.113086 * unemp_total +
+(-0.150237) * u5_mort +
+(-0.017645) * trade +
+0.031907 * gini,
+RMSE = RMSE(life_exp, pred_life_exp)
+)
+# show a few rows with predictions
+sum_model_2015 %>%
+arrange(desc(life_exp)) %>%
+select(`Country Name`, Time, life_exp, pred_life_exp, RMSE) %>%
+head(10)
+# overall RMSE of 2015 summation model
+rmse_2015_sum <- RMSE(sum_model_2015$life_exp, sum_model_2015$pred_life_exp)
+rmse_2015_sum
+# ---------------------------------------------------------
+# 6. GLM with train/test split on 2015 data
+#    (very similar to happiness code)
+# ---------------------------------------------------------
+set.seed(123)
+# try several training proportions p, compute RMSE for each
+ps <- seq(from = 0.30, to = 0.90, by = 0.01)
+rmses_2015 <- sapply(ps, function(p) {
+train_index <- createDataPartition(
+data_2015$life_exp,
+times = 1,
+p = p,
+list = FALSE
+)
+train <- data_2015[train_index, ]
+test  <- data_2015[-train_index, ]
+fit <- glm(
+life_exp ~ gdp_ppp + sec_enrol + unemp_total + u5_mort + trade + gini,
+data = train
+)
+test <- test %>%
+mutate(pred_life_exp = predict(fit, newdata = test))
+RMSE(test$life_exp, test$pred_life_exp)
+})
+plot(ps, rmses_2015, type = "b",
+main = "RMSE vs Training Proportion (2015)",
+xlab = "Training proportion (p)",
+ylab = "RMSE")
+ps[which.min(rmses_2015)]
+min(rmses_2015)
+# choose p = 0.70 (like happiness example, or use best p above)
+set.seed(123)
+train_index_2015 <- createDataPartition(
+data_2015$life_exp,
+times = 1,
+p = 0.70,
+list = FALSE
+)
+train_2015 <- data_2015[train_index_2015, ]
+test_2015  <- data_2015[-train_index_2015, ]
+fit_2015_glm <- glm(
+life_exp ~ gdp_ppp + sec_enrol + unemp_total + u5_mort + trade + gini,
+data = train_2015
+)
+results_2015 <- test_2015 %>%
+mutate(pred_life_exp = predict(fit_2015_glm, newdata = test_2015))
+# plot predicted vs actual (2015)
+ggplot(results_2015, aes(x = life_exp, y = pred_life_exp)) +
+geom_point(color = "black") +
+geom_smooth(method = "lm", se = TRUE) +
+geom_abline(color = "red") +
+labs(
+title = "Predicted vs Actual Life Expectancy (2015)",
+x = "Actual life expectancy",
+y = "Predicted life expectancy"
+)
+# RMSE for 2015 GLM
+RMSE(results_2015$life_exp, results_2015$pred_life_exp)
+# coefficients
+fit_2015_glm$coefficients
+# ---------------------------------------------------------
+# 7. Full panel GLM (2005–2015), similar idea to 2018+2019 fit
+# ---------------------------------------------------------
+set.seed(123)
+# try train/test split on full panel
+train_index_full <- createDataPartition(
+panel_data$life_exp,
+times = 1,
+p = 0.70,
+list = FALSE
+)
+train_full <- panel_data[train_index_full, ]
+test_full  <- panel_data[-train_index_full, ]
+# model with Time as extra predictor
+fit_full <- glm(
+life_exp ~ gdp_ppp + sec_enrol + unemp_total + u5_mort + trade + gini + Time,
+data = train_full
+)
+results_full <- test_full %>%
+mutate(pred_life_exp = predict(fit_full, newdata = test_full))
+# plot predicted vs actual (panel)
+ggplot(results_full, aes(x = life_exp, y = pred_life_exp)) +
+geom_point(color = "black") +
+geom_smooth(method = "lm", se = TRUE) +
+geom_abline(color = "red") +
+labs(
+title = "Predicted vs Actual Life Expectancy (2005–2015)",
+x = "Actual life expectancy",
+y = "Predicted life expectancy"
+)
+# RMSE for full model
+RMSE(results_full$life_exp, results_full$pred_life_exp)
+# coefficients
+fit_full$coefficients
+# ---------------------------------------------------------
+# 8. Simpler full model (drop some predictors) and compare RMSE
+# ---------------------------------------------------------
+fit_full_simple <- glm(
+life_exp ~ gdp_ppp + sec_enrol + u5_mort + Time,
+data = train_full
+)
+results_full_simple <- test_full %>%
+mutate(pred_life_exp = predict(fit_full_simple, newdata = test_full))
+RMSE(results_full_simple$life_exp, results_full_simple$pred_life_exp)
+fit_full_simple$coefficients
+source("E:/my project/recherche master edx/world hapines/world happines/word_happines.R")
+source("E:/my project/recherche master edx/world hapines/world happines/word_happines.R")
+source("E:/my project/recherche master edx/world hapines/world happines/word_happines.R")
+install.packages("tinytex")

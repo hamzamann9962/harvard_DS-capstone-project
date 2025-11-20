@@ -1,0 +1,4 @@
+"0","ggplot(data_2015, aes(x = life_exp)) +"
+"0","  geom_histogram(fill=""steelblue"", color=""white"", bins=15, alpha=0.8) +"
+"0","  labs(title=""Life Expectancy Distribution (2015)"", x=""Years"", y=""Frequency"") +"
+"0","  theme_minimal()"
